@@ -87,7 +87,8 @@ header{animation:rise .5s both}
 .brush{position:relative;height:40px;margin:4px 12px 2px;background:var(--plot-bg);
   border:1px solid var(--line);border-radius:8px;touch-action:none}
 .brush-fill{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--glow-color) 18%,transparent);
-  border-left:1px solid var(--glow-color);border-right:1px solid var(--glow-color)}
+  border-left:1px solid var(--glow-color);border-right:1px solid var(--glow-color);cursor:grab}
+.brush-fill:active{cursor:grabbing}
 .brush-h{position:absolute;top:-2px;width:12px;height:44px;transform:translateX(-50%);
   background:var(--glow-color);border-radius:4px;cursor:ew-resize;box-shadow:0 1px 4px rgba(0,0,0,.4)}
 .brush-cap{font-family:var(--font-mono);font-size:11px;color:var(--mut);margin:0 12px 8px;
@@ -121,7 +122,6 @@ header{animation:rise .5s both}
 <header>
   <div class="kicker">SIMULAÇÃO DE BATERIA · CASCAIS</div>
   <h1>Casa Fonta Velha</h1>
-  <div class="sub">Реальные 15-минутные данные SMA · симуляция офлайн в браузере</div>
   <div id="kpi" class="kpi"></div>
   <button id="themeBtn" class="seg-btn" title="Сменить тему">◐</button>
 </header>
@@ -206,7 +206,6 @@ header{animation:rise .5s both}
       <table id="abTbl" class="shed"></table>
     </div>
     </details>
-    <small>Старт с пустой АКБ. «Ночь+солнце» = ночью добор из сети в окне, днём — от солнца.</small>
   </div>
 
   <div class="charts">
@@ -760,6 +759,23 @@ function dragHandle(which){ return (ev)=>{
 };}
 hA.addEventListener('pointerdown', dragHandle('a'));
 hB.addEventListener('pointerdown', dragHandle('b'));
+// сдвиг всего окна за середину (ширина сохраняется)
+brushFill.addEventListener('pointerdown',(ev)=>{
+  ev.preventDefault();
+  const rect=brushEl.getBoundingClientRect();
+  const posA0=nearestBoundPos(winState.a), posB0=nearestBoundPos(winState.b);
+  const wPos=posB0-posA0;                                  // ширина окна в позициях суток — инвариант
+  const grab=(ev.clientX-rect.left)/rect.width*N - winState.a; // смещение захвата от левого края окна
+  const move=(e)=>{
+    const newLeft=Math.round((e.clientX-rect.left)/rect.width*N - grab);
+    let posA=nearestBoundPos(newLeft);
+    posA=Math.max(0, Math.min(posA, bounds.length-1-wPos)); // стоп у краёв, ширину не меняем
+    winState.a=bounds[posA]; winState.b=bounds[posA+wPos];
+    rng.value='custom'; syncBrush(); render();
+  };
+  const up=()=>{ window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',up); };
+  window.addEventListener('pointermove',move); window.addEventListener('pointerup',up);
+});
 syncBrush();
 
 // ---- подсказки «?» (переиспользуют showTip/hideTip) ----
