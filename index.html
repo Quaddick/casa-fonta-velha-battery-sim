@@ -644,7 +644,6 @@ function render(){
   vzV.textContent=vzStart.value+':00–'+vzEnd.value+':00';
   const [aa,bb]=curWindow(); const B=summarize(aa,bb);
   document.getElementById('kpi').innerHTML=
-    `<span>SOC <b>${primary.SOC[bb-1]?.toFixed(0)??'—'}%</b><span class="help" data-tip="Заряд батареи на конце выбранного периода, %.">?</span></span>`+
     `<span>импорт <b>${B.imp.toFixed(0)}</b> кВт·ч/д<span class="help" data-tip="Средний импорт из сети за сутки в выбранном периоде, кВт·ч.">?</span></span>`+
     `<span><b>${B.eur.toFixed(2)}</b> €/д<span class="help" data-tip="Средняя стоимость импорта за сутки при заданном тарифе.">?</span></span>`+
     `<span class="sep"></span>`+
