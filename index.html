@@ -15,7 +15,7 @@
   --pv:#f5b301; --pv2:#ffcf4a; --load:#b9ad99;
   --soc:#37c26b; --soc2:#2fd4a0; --grid:#ef4b4b; --chg:#43a047; --dis:#1565c0; --socReal:#f5a623;
   --glow:1; --glow-color:#f5b301; --plot-bg:#181410; --grid-line:#2c2519;
-  --zone-off:rgba(57,181,74,0); --zone-shoulder:rgba(57,181,74,0); --zone-peak:rgba(204,51,51,0); --row-hover:#241d15;
+  --zone-off:rgba(57,181,74,.05); --zone-shoulder:rgba(57,181,74,.025); --zone-peak:rgba(204,51,51,.04); --row-hover:#241d15;
   --font-display:'Instrument Serif',Georgia,serif;
   --font-body:'Hanken Grotesk',system-ui,sans-serif;
   --font-mono:'IBM Plex Mono',ui-monospace,monospace;
@@ -76,6 +76,7 @@ table.shed th{color:var(--mut);font-weight:500;text-align:left;padding:2px}
 table.shed input{width:54px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:3px}
 .seg-btn{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer;margin-top:6px}
 .seg-btn:hover{border-color:var(--glow-color)}
+.seg-btn.on{background:color-mix(in srgb,var(--glow-color) 20%,var(--panel));border-color:var(--glow-color)}
 .controls input[type=number]{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:5px}
 #abTbl tr:hover{background:var(--row-hover)}
 @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -202,7 +203,7 @@ header{animation:rise .5s both}
     </div>
     </details>
 
-    <details class="grp" open id="grpImport"><summary>Импорт данных</summary>
+    <details class="grp" id="grpImport"><summary>Импорт данных</summary>
     <div id="dropZone" class="dropzone" style="border:1.5px dashed var(--grid-line,#2a3550);border-radius:8px;padding:14px;text-align:center;cursor:pointer">
       <div id="dropHint">Перетащите CSV (Energy Balance и/или SOC) сюда<br>или нажмите, чтобы выбрать</div>
       <input type="file" id="fileInput" accept=".csv" multiple hidden>
@@ -962,13 +963,17 @@ function simulate(useNight){
 // ---- пресеты моделирования (калибровка: node calibrate_night.mjs, Блок B) ----
 const PRESET_NIGHT={cap:24, rt:90, pmax:6, ws:0, we:7, np:2.3}; // ← значения из calibrate_night.mjs
 const PRESET_SOLAR={...PRESET_NIGHT, np:0};                     // npow=0 де-факто отключает ночной заряд
-function applyPreset(p){
+let activePreset=null;                                  // 'night' | 'solar' | null
+function applyPreset(p, key){
   cap_.value=p.cap; rt_.value=p.rt; pmax_.value=p.pmax;
   wstart.value=p.ws; wend.value=p.we; npow.value=p.np;
+  activePreset=key;
+  document.getElementById('presetNight').classList.toggle('on', key==='night');
+  document.getElementById('presetSolar').classList.toggle('on', key==='solar');
   render();
 }
-document.getElementById('presetNight').onclick=()=>applyPreset(PRESET_NIGHT);
-document.getElementById('presetSolar').onclick=()=>applyPreset(PRESET_SOLAR);
+document.getElementById('presetNight').onclick=()=>applyPreset(PRESET_NIGHT,'night');
+document.getElementById('presetSolar').onclick=()=>applyPreset(PRESET_SOLAR,'solar');
 
 // ---- theme helpers ----
 function cssVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
@@ -1221,8 +1226,7 @@ function render(){
     draw(c2,a,b,socSeries,{ymin:0,ymax:105,dec:0});
     leg2.innerHTML=legHtml;
     // panel3: потоки модели (или факта); в «Сравнить» поверх — пунктир факт-импорта
-    const isLight=document.documentElement.dataset.theme==='cascais';
-    const zoneLevel=isLight?(i=>SimEngine.tariffLevel(MIN[i]/60)):null;
+    const zoneLevel=(i=>SimEngine.tariffLevel(MIN[i]/60)); // зоны на обеих темах (цвета из CSS-переменных --zone-*)
     const Fgrid=fact?GIMPkw:main.GRID;
     const Fchg=fact?BCHGkw:main.BP.map(v=>v>0?v:0);
     const FdisNeg=fact?BDISkw.map(v=>-v):main.BP.map(v=>v<0?v:0);
@@ -1266,8 +1270,6 @@ function render(){
     ? `<span class="sec">автономия <b>${B.autFull.toFixed(0)}%</b><span class="help" data-tip="Доля потребления, покрытая не из сети, по замерам: 1 − импорт / потребление (не ниже 0: в дни заряда АКБ от сети импорт может превышать потребление).">?</span></span>`
     : `<span class="sec">автономия <b>${B.autFull.toFixed(0)}%</b> · солнце <b>${B.autSolar.toFixed(0)}%</b><span class="help" data-tip="Автономия — доля потребления не из сети (PV напрямую + весь разряд АКБ). Солнце — только реально солнечное: PV напрямую + разряд АКБ, заряженной солнцем; ночной заряд из сети не в счёт.">?</span></span>`;
   document.getElementById('kpi').innerHTML=
-    `<span class="sec">режим <b>${fact?'Факт':'Модель'}</b><span class="help" data-tip="${fact?'Все цифры — измеренные данные за период.':'Все цифры — результат what-if модели.'}">?</span></span>`+
-    `<span class="sep"></span>`+
     `<span>импорт <b>${B.imp.toFixed(0)}</b> кВт·ч/д<span class="help" data-tip="Средний импорт из сети за сутки в выбранном периоде, кВт·ч.">?</span></span>`+
     `<span><b>${B.eur.toFixed(2)}</b> €/д<span class="help" data-tip="Средняя стоимость импорта за сутки при заданном тарифе.">?</span></span>`+
     `<span class="sep"></span>`+
@@ -1506,4 +1508,5 @@ async function boot(){
 boot();
 
 </script>
+<div style="position:fixed;bottom:8px;left:10px;font-size:11px;opacity:.35;pointer-events:none;color:var(--ink);font-family:inherit;letter-spacing:.03em">v1.8</div>
 </body></html>
