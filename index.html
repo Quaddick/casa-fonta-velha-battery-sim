@@ -340,13 +340,17 @@ const DATA = {"start":"2025-05-27","days":[{"d":"2025-05-27","i":0,"n":96},{"d":
   // → {eOff, eShoulder, ePeak, cOff, cShoulder, cPeak, total}
   function cost(grid, min, prices, dt) {
     dt = dt || 0.25;
+    // Пустое поле цены в UI даёт NaN — трактуем как 0, чтобы NaN не пробрасывался в total.
+    const pOff = Number.isFinite(prices.offpeak) ? prices.offpeak : 0;
+    const pSh = Number.isFinite(prices.shoulder) ? prices.shoulder : 0;
+    const pPk = Number.isFinite(prices.peak) ? prices.peak : 0;
     let eOff = 0, eShoulder = 0, ePeak = 0, cOff = 0, cShoulder = 0, cPeak = 0;
     for (let i = 0; i < grid.length; i++) {
       const e = grid[i] * dt; if (e <= 0) continue;
       const lvl = tariffLevel(hourOfDay(min[i]));
-      if (lvl === 'offpeak') { eOff += e; cOff += e * prices.offpeak; }
-      else if (lvl === 'peak') { ePeak += e; cPeak += e * prices.peak; }
-      else { eShoulder += e; cShoulder += e * prices.shoulder; }
+      if (lvl === 'offpeak') { eOff += e; cOff += e * pOff; }
+      else if (lvl === 'peak') { ePeak += e; cPeak += e * pPk; }
+      else { eShoulder += e; cShoulder += e * pSh; }
     }
     return { eOff, eShoulder, ePeak, cOff, cShoulder, cPeak, total: cOff + cShoulder + cPeak };
   }
@@ -603,9 +607,13 @@ function renderShedRows(){
 document.getElementById('shedAdd').onclick=()=>{ shedRules.push({power:1,from:0,to:6,on:true}); renderShedRows(); render(); };
 function avgPerDay(arr){ let s=0; for(const v of arr) s+=v*0.25; return s/Math.max(1,DATA.days.length); }
 let snapA=null;
+// последние валидные цены тарифа; пустое поле (NaN) → берём отсюда, не ломаем KPI
+let lastPrices={offpeak:0.09, shoulder:0.12, peak:0.29};
+function priceVal(el,key){ const v=parseFloat(el.value);
+  if(Number.isFinite(v)){ lastPrices[key]=v; return v; } return lastPrices[key]; }
 function summarize(a,b){
   const nd=Math.max(1,(b-a)*dt/24);
-  const prices={offpeak:+prOff.value, shoulder:+prShoulder.value, peak:+prPeak.value};
+  const prices={offpeak:priceVal(prOff,'offpeak'), shoulder:priceVal(prShoulder,'shoulder'), peak:priceVal(prPeak,'peak')};
   if(mode==='fact'){
     let g=0,chg=0,cons=0;
     for(let i=a;i<b;i++){ g+=GIMPkw[i]*dt; chg+=BCHGkw[i]*dt; cons+=LDkw[i]*dt; }
