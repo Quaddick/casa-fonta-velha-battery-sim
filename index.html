@@ -607,6 +607,11 @@ const DATA = {"start":"2025-05-27","days":[{"d":"2025-05-27","i":0,"n":96},{"d":
     const map = buildColumnMap(header);
     const date = dateFromName(filename); // YYYY-MM-DD из имени файла
     const METRICS = ['direct', 'battDischarge', 'gridImport', 'total', 'feedIn', 'battCharge', 'pv', 'limiting'];
+    // Реальные каналы (без 'limiting'): по ним определяем «пустой» интервал.
+    const REAL_METRICS = ['direct', 'battDischarge', 'gridImport', 'total', 'feedIn', 'battCharge', 'pv'];
+    const isEmptyInterval = function (it) {
+      return REAL_METRICS.every(function (k) { return it[k + '_raw'] == null; });
+    };
     const intervals = [];
     let complete = true;
 
@@ -637,6 +642,9 @@ const DATA = {"start":"2025-05-27","days":[{"d":"2025-05-27","i":0,"n":96},{"d":
       intervals.push(it);
     }
     intervals.sort(function (a, b) { return a.startMin - b.startMin; });
+    // v1.91: отбросить концевые интервалы без данных (пустой будущий хвост неполного дня).
+    // complete уже вычислен по исходным строкам выше — семантика флага сохраняется.
+    while (intervals.length && isEmptyInterval(intervals[intervals.length - 1])) intervals.pop();
 
     // Энергия за сутки (кВт·ч) = сумма мощностей * 0.25 ч
     const energy = {};
@@ -809,7 +817,9 @@ const DATA = {"start":"2025-05-27","days":[{"d":"2025-05-27","i":0,"n":96},{"d":
     const dates = Object.keys(energyDays).sort();
     const pv = [], load = [], min = [], gridImport = [], battCharge = [], battDischarge = [], realSoc = [], days = [];
     for (const date of dates) {
-      const rec = energyDays[date], i0 = pv.length, n = rec.min.length;
+      const rec = energyDays[date];
+      if (!rec || !rec.min || rec.min.length === 0) continue; // v1.91: пустой импорт-день не пишем
+      const i0 = pv.length, n = rec.min.length;
       for (let k = 0; k < n; k++) {
         pv.push(rec.pv[k]); load.push(rec.load[k]); min.push(rec.min[k]);
         gridImport.push(rec.gridImport[k]); battCharge.push(rec.battCharge[k]); battDischarge.push(rec.battDischarge[k]);
